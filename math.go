@@ -30,10 +30,20 @@ func transform(frequency float64, samples Samples) float64 {
 		EvaluationSettings{
 			min: 0,
 			max: samples.Config().duration,
-			dx:  samples.Config().dt,
+			dx:  samples.Config().dt(),
 			function: func(x float64) float64 {
 				return samples.Fetch(x) * math.Cos(2*frequency*math.Pi*x)
 			},
 		},
 	)
+}
+
+func clamp(v, min, max float64) float64 {
+	if v < min {
+		return min
+	} else if v > max {
+		return max
+	}
+
+	return v
 }

@@ -2,6 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"os"
+
+	"github.com/youpy/go-wav"
 )
 
 type SampleRequestOutOfBounds struct {
@@ -18,9 +22,12 @@ func (s *SampleRequestOutOfBounds) Error() string {
 }
 
 type PlaybackConfig struct {
-	rate     int
+	rate     uint32
 	duration float64
-	dt       float64
+}
+
+func (c PlaybackConfig) dt() float64 {
+	return c.duration / float64(c.rate)
 }
 
 type Samples interface {
@@ -59,17 +66,56 @@ type RawSamples struct {
 	data   []float64
 }
 
-func InitializeRawSamples(rate int, data []float64) RawSamples {
-	if rate < 0 {
-		rate = len(data)
+func InitializeSamplesFromWav() RawSamples {
+	file, err := os.Open("Jangle.wav")
+	if err != nil {
+		panic(err)
 	}
 
-	duration := float64(len(data)) / float64(rate)
+	defer file.Close()
+
+	reader := wav.NewReader(file)
+
+	format, err := reader.Format()
+	if err != nil {
+		panic(err)
+	}
+
+	duration, err := reader.Duration()
+	if err != nil {
+		panic(err)
+	}
+
+	result := []float64{}
+
+	for {
+		samples, err := reader.ReadSamples()
+		if err == io.EOF {
+			break
+		}
+
+		s := make([]float64, len(samples))
+		for i, sample := range samples {
+			s[i] = (reader.FloatValue(sample, 0) + reader.FloatValue(sample, 1)) / 2
+		}
+
+		result = append(result, s...)
+	}
+
+	return RawSamples{
+		config: PlaybackConfig{
+			rate:     format.SampleRate,
+			duration: duration.Seconds(),
+		},
+		data: result,
+	}
+}
+
+func InitializeRawSamples(rate uint32, data []float64) RawSamples {
 	return RawSamples{
 		config: PlaybackConfig{
 			rate:     rate,
-			duration: duration,
-			dt:       duration / float64(rate),
+			duration: float64(len(data)) / float64(rate),
 		},
 		data: data,
 	}
